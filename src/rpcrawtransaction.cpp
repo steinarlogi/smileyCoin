@@ -830,3 +830,33 @@ Value sendrawtransaction(const Array& params, bool fHelp)
 
     return hashTx.GetHex();
 }
+
+Value lottery(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 1)
+        throw runtime_error(
+            "lottery \"amount\"\nSend an amount to the lottery. The amount must be greater than 1000"
+            " to get in the lottery."
+            "\nArguments:\n"
+            "1. \"amount\"       (numeric, required) The amount in smly to send to the lottery\n"
+            "Result:\n"
+            "\"transactionid\" (string) The transaction id.\n"
+            "\nExamples\n"
+            + HelpExampleCli("lottery", "1000")
+        );
+
+    //The lottery address
+    CBitcoinAddress address("BE8svSuyAuFFm1RFC8CGWXxyHCKjKBEYQW");
+
+    int64_t nAmount = AmountFromValue(params[0]);
+
+    CWalletTx wtx;
+
+    EnsureWalletIsUnlocked();
+
+    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx);
+    if (strError != "")
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+
+    return wtx.GetHash().GetHex();
+}

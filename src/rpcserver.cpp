@@ -320,6 +320,7 @@ static const CRPCCommand vRPCCommands[] =
     { "listtransactions",       &listtransactions,       false,     false,      true },
     { "listunspent",            &listunspent,            false,     false,      true },
     { "lockunspent",            &lockunspent,            false,     false,      true },
+    { "lottery",                &lottery,                false,     false,      true }, 
     { "move",                   &movecmd,                false,     false,      true },
     { "sendfrom",               &sendfrom,               false,     false,      true },
     { "sendmany",               &sendmany,               false,     false,      true },

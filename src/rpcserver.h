@@ -21,7 +21,7 @@
 // Boost Support for 1.70+
 #if BOOST_VERSION >= 107000
     #define GetIOService(s) ((boost::asio::io_context&)(s).get_executor().context())
-    #define GetIOServiceFromPtr(s) ((boost::asio::io_context&)(s->get_executor().context())) 
+    #define GetIOServiceFromPtr(s) ((boost::asio::io_context&)(s->get_executor().context()))
     typedef boost::asio::io_context ioContext;
 
 #else
@@ -225,5 +225,8 @@ extern json_spirit::Value getblock(const json_spirit::Array& params, bool fHelp)
 extern json_spirit::Value gettxoutsetinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value gettxout(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value verifychain(const json_spirit::Array& params, bool fHelp);
+
+//Viðbót frá mér
+extern json_spirit::Value lottery(const json_spirit::Array& params, bool fHelp); //in rpcrawtransaction.cpp.
 
 #endif
