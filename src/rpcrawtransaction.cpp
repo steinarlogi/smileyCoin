@@ -16,7 +16,10 @@
 #endif
 
 #include <stdint.h>
+#include <fstream>
+#include "hash.h"
 
+#include <openssl/sha.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/assign/list_of.hpp>
 #include "json/json_spirit_utils.h"
@@ -859,4 +862,445 @@ Value lottery(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     return wtx.GetHash().GetHex();
+}
+
+Value signrawtokentransaction(string txDataHex) {
+  vector<unsigned char> txData(ParseHexV(txDataHex, "argument 1"));
+  CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+  vector<CMutableTransaction> txVariants;
+  while (!ssData.empty())
+  {
+      try {
+          CMutableTransaction tx;
+          ssData >> tx;
+          txVariants.push_back(tx);
+      }
+      catch (std::exception &e) {
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+      }
+  }
+
+  if (txVariants.empty())
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Missing transaction");
+
+  // mergedTx will end up with all the signatures; it
+  // starts as a clone of the rawtx:
+  CMutableTransaction mergedTx(txVariants[0]);
+  bool fComplete = true;
+
+  // Fetch previous transactions (inputs):
+  CCoinsView viewDummy;
+  CCoinsViewCache view(viewDummy);
+  {
+      LOCK(mempool.cs);
+      CCoinsViewCache &viewChain = *pcoinsTip;
+      CCoinsViewMemPool viewMempool(viewChain, mempool);
+      view.SetBackend(viewMempool); // temporarily switch cache backend to db+mempool view
+
+      BOOST_FOREACH(const CTxIn& txin, mergedTx.vin) {
+          const uint256& prevHash = txin.prevout.hash;
+          CCoins coins;
+          view.GetCoins(prevHash, coins); // this is certainly allowed to fail
+      }
+
+      view.SetBackend(viewDummy); // switch back to avoid locking mempool for too long
+  }
+
+  bool fGivenKeys = false;
+  CBasicKeyStore tempKeystore;
+
+  #ifdef ENABLE_WALLET
+    EnsureWalletIsUnlocked();
+  #endif
+
+  #ifdef ENABLE_WALLET
+  const CKeyStore& keystore = ((fGivenKeys || !pwalletMain) ? tempKeystore : *pwalletMain);
+  #else
+  const CKeyStore& keystore = tempKeystore;
+  #endif
+
+  int nHashType = SIGHASH_ALL;
+
+  bool fHashSingle = ((nHashType & ~SIGHASH_ANYONECANPAY) == SIGHASH_SINGLE);
+
+  // Sign what we can:
+  for (unsigned int i = 0; i < mergedTx.vin.size(); i++)
+  {
+      CTxIn& txin = mergedTx.vin[i];
+      CCoins coins;
+      if (!view.GetCoins(txin.prevout.hash, coins) || !coins.IsAvailable(txin.prevout.n))
+      {
+          fComplete = false;
+          continue;
+      }
+      const CScript& prevPubKey = coins.vout[txin.prevout.n].scriptPubKey;
+
+      txin.scriptSig.clear();
+      // Only sign SIGHASH_SINGLE if there's a corresponding output:
+      if (!fHashSingle || (i < mergedTx.vout.size()))
+          SignSignature(keystore, prevPubKey, mergedTx, i, nHashType);
+
+      // ... and merge in other signatures:
+      BOOST_FOREACH(const CMutableTransaction& txv, txVariants)
+      {
+          txin.scriptSig = CombineSignatures(prevPubKey, mergedTx, i, txin.scriptSig, txv.vin[i].scriptSig);
+      }
+      if (!VerifyScript(txin.scriptSig, prevPubKey, mergedTx, i, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC, 0))
+          fComplete = false;
+  }
+  CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+  ssTx << mergedTx;
+
+  return HexStr(ssTx.begin(), ssTx.end());
+}
+
+string GetHexStringFromBytes(vector<unsigned char> c) {
+  string s = "";
+
+  for(char character : c) {
+    int firstHalf = (character >> 4) & (unsigned char)(0x0F);
+    int secondHalf = character & (unsigned char)(0x0F);
+
+    if(firstHalf == 0) {
+      s = s + "0";
+    } else if(firstHalf == 1) {
+      s = s + "1";
+    } else if(firstHalf == 2) {
+      s = s + "2";
+    } else if(firstHalf == 3) {
+      s = s + "3";
+    } else if(firstHalf == 4) {
+      s = s + "4";
+    } else if(firstHalf == 5) {
+      s = s + "5";
+    } else if(firstHalf == 6) {
+      s = s + "6";
+    } else if(firstHalf == 7) {
+      s = s + "7";
+    } else if(firstHalf == 8) {
+      s = s + "8";
+    } else if(firstHalf == 9) {
+      s = s + "9";
+    } else if(firstHalf == 10) {
+      s = s + "a";
+    } else if(firstHalf == 11) {
+      s = s + "b";
+    } else if(firstHalf == 12) {
+      s = s + "c";
+    } else if(firstHalf == 13) {
+      s = s + "d";
+    } else if(firstHalf == 14) {
+      s = s + "e";
+    } else if(firstHalf == 15) {
+      s = s + "f";
+    }
+
+    if(secondHalf == 0) {
+      s = s + "0";
+    } else if(secondHalf == 1) {
+      s = s + "1";
+    } else if(secondHalf == 2) {
+      s = s + "2";
+    } else if(secondHalf == 3) {
+      s = s + "3";
+    } else if(secondHalf == 4) {
+      s = s + "4";
+    } else if(secondHalf == 5) {
+      s = s + "5";
+    } else if(secondHalf == 6) {
+      s = s + "6";
+    } else if(secondHalf == 7) {
+      s = s + "7";
+    } else if(secondHalf == 8) {
+      s = s + "8";
+    } else if(secondHalf == 9) {
+      s = s + "9";
+    } else if(secondHalf == 10) {
+      s = s + "a";
+    } else if(secondHalf == 11) {
+      s = s + "b";
+    } else if(secondHalf == 12) {
+      s = s + "c";
+    } else if(secondHalf == 13) {
+      s = s + "d";
+    } else if(secondHalf == 14) {
+      s = s + "e";
+    } else if(secondHalf == 15) {
+      s = s + "f";
+    }
+  }
+
+  return s;
+}
+
+Value createtoken(const Array& params, bool fhelp) {
+  if(fhelp || params.size() < 2 || params.size() > 2) {
+    throw runtime_error(
+        "createtoken \"absolute_path_to_file\" \"previous_tx_id\" "
+        "\ncreate a token from file specified and an output from the transactions with id: transaction_id needs to be used in creation"
+        "\nArguments:\n"
+        "1. \"absolute_path_to_file\"       (string, required) Absolute path to file to be tokenized\n"
+        "2. \"previous_tx_id\" (string, required) In order for the token to be valid output from this transaction needs to be used for creating the token"
+        "Result:\n"
+        "\"tokenid\" (string) The token id.\n"
+        "\nExamples\n"
+        + HelpExampleCli("lottery", "1000")
+    );
+  }
+
+  //Opna skranna
+  ifstream file(params[0].get_str(), ifstream::binary);
+  file.seekg(0, file.end);
+  int length = file.tellg();
+  file.seekg(0, file.beg);
+
+  char buffer[length];
+
+  file.read(buffer, length);
+  file.close();
+
+  string filestring(buffer);
+
+  //Bæti transaction id á færslunni á undan:
+  filestring = filestring + params[1].get_str();
+
+  CHashWriter hashWriter(1, 1);
+
+  hashWriter.write((const char*) &filestring[0], 64);
+
+  uint256 hash = hashWriter.GetHash();
+
+  CKey key;
+  key.MakeNewKey(false);
+  CPubKey pubKey = key.GetPubKey();
+
+  vector<unsigned char> signature;
+
+  key.Sign(hash, signature);
+
+  string pubKeyString = pubKey.GetHash().GetHex();
+  string signatureHexString = GetHexStringFromBytes(signature);
+  string privateKeyHex = CBitcoinSecret(key).ToString();
+
+  Object result;
+
+  result.push_back(Pair("Token ID", signatureHexString));
+  result.push_back(Pair("Token public key", pubKeyString));
+  result.push_back(Pair("Token private key", privateKeyHex));
+
+  return result;
+}
+
+//Nota í inittoken aðferðinni.
+Value CreateToken(string pathToFile, string previousTxId) {
+
+  //Opna skranna
+  ifstream file(pathToFile, ifstream::binary);
+  file.seekg(0, file.end);
+  int length = file.tellg();
+  file.seekg(0, file.beg);
+
+  char buffer[length];
+
+  file.read(buffer, length);
+  file.close();
+
+  string filestring(buffer);
+
+  //Bæti transaction id á færslunni á undan:
+  filestring = filestring + previousTxId;
+
+  CHashWriter hashWriter(1, 1);
+
+  hashWriter.write((const char*) &filestring[0], 64);
+
+  uint256 hash = hashWriter.GetHash();
+
+  CKey key;
+  key.MakeNewKey(false);
+  CPubKey pubKey = key.GetPubKey();
+
+  vector<unsigned char> signature;
+
+  key.Sign(hash, signature);
+
+  string pubKeyString = pubKey.GetHash().GetHex();
+  string signatureHexString = GetHexStringFromBytes(signature);
+  string privateKeyHex = CBitcoinSecret(key).ToString();
+
+  Object result;
+
+  result.push_back(Pair("Token ID", signatureHexString));
+  result.push_back(Pair("Token public key", pubKeyString));
+  result.push_back(Pair("Token private key", privateKeyHex));
+
+  return result;
+
+}
+
+//fall sem sendir 1 á address sem veskið á og skilar outputinu og n.
+uint256 makeInputTransactionForToken(int am) {
+
+  Value amount(am);
+  CWalletTx wtx;
+
+  const CBitcoinAddress& walletAddress = (pwalletMain->mapAddressBook.begin())->first;
+  //Fer fyrst í gegnum addresses sem eru til í þessu veski.
+  /*BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, CAddressBookData)& item, pwalletMain->mapAddressBook)
+  {
+    const CBitcoinAddress& walletAddress = item.first;
+    break;
+  }*/
+
+  //Notum aðferð tvö svo að við notum ekki transactions með op_return svæði sem input.
+  string strError = pwalletMain->SendMoneyToDestination2(walletAddress.Get(), AmountFromValue(amount), wtx);
+  if(strError != "") {
+    throw JSONRPCError(RPC_WALLET_ERROR, strError);
+  }
+
+  return wtx.GetHash();
+}
+
+/*Value sendtokentoaddress(const Array& params, bool fhelp) {
+  if(fhelp || params.size() < 2 || params.size() > 2) {
+    throw runtime_error(
+        "sendtokentoaddress \"txid\" \"address\" \"n\""
+        "\n send a token that's stored in transaction with id \"txid\" to address \"address\""
+        "\nArguments:\n"
+        "1. \"txid\"       (string, required) tx where token is stored\n"
+        "2. \"smlyaddress\" smileyaddress of where the token should be sent to\n"
+        "Result:\n"
+        "\"complete\" (bool) true if successful false otherwise.\n"
+        "\nExamples\n"
+        + HelpExampleCli("lottery", "1000")
+      );
+  }
+
+  uint256 inputtx = makeInputTransactionForToken();
+  int nOutput = 1
+
+  uint256 previousTokenTx = ParseHexV(params[0], "Parameter 1");
+
+  CMutableTransaction rawtx;
+
+  CTxIn in(COutPoint(inputtxid, nOutput));
+  rawtx.
+
+}*/
+
+
+Value inittoken(const Array& params, bool fhelp) {
+
+  if(fhelp || params.size() < 2 || params.size() > 2) {
+    throw runtime_error(
+        "inittoken \"smlyaddress\" \"pathToFile\" \"n\""
+        "\ncreate a token from file specified and an output from the transactions with id: transaction_id needs to be used in creation"
+        "\nArguments:\n"
+        "1. \"smlyaddress\" smileyaddress of where the token should be sent to"
+        "2. \"PathToFile\" the path to the file that is to be reperesented as a token"
+        "Result:\n"
+        "\"tokenid\", \"token private key\", \"token public key\", \"transaction id\"\n"
+      );
+  }
+
+  //1 SMly fer í færslugjöld
+  uint256 inputtxid = makeInputTransactionForToken(1001);
+
+  //skoða inputfærsluna og finn rétta outputið.
+  CTransaction inputTransaction;
+  uint256 hashBlock;
+  if(!GetTransaction(inputtxid, inputTransaction, hashBlock, false))
+    throw runtime_error("Error");
+
+  //Athugum hvar output 1001 sé.
+  int nOutput = 0;
+  int64_t checkAmount = 1001*COIN;
+  BOOST_FOREACH(const CTxOut& inputTransactionOut, inputTransaction.vout) {
+    if(inputTransactionOut.nValue == checkAmount)
+      break;
+
+    nOutput = nOutput + 1;
+  }
+
+  //Token er búinn til með inputtxid.
+  Value token = CreateToken(params[1].get_str(), inputtxid.GetHex());
+
+  CMutableTransaction rawTx;
+
+  //notum bara þetta sem input.
+  CTxIn in(COutPoint(inputtxid, nOutput));
+
+  rawTx.vin.push_back(in);
+
+  CBitcoinAddress address(params[0].get_str());
+
+  if(!address.IsValid()) {
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid smly address"));
+  }
+
+  CScript scriptPubKey;
+  scriptPubKey.SetDestination(address.Get());
+
+  CTxOut out(1000 * COIN, scriptPubKey);
+
+  rawTx.vout.push_back(out);
+
+  //string hexdata = params[0].get_str();
+  //vector<unsigned char> data = ParseHexV(params[0], "data");
+  vector<unsigned char> data = ParseHexO(token.get_obj(), "Token ID");
+
+  CTxOut out2(0, CScript() << OP_RETURN << data);
+  rawTx.vout.push_back(out2);
+
+  CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+  ss << rawTx;
+
+  Value signedValue = signrawtokentransaction(HexStr(ss.begin(), ss.end()));
+
+  // parse hex string from parameter
+  vector<unsigned char> txData(ParseHexV(signedValue, "parameter"));
+  CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+  CTransaction tx;
+
+  bool fOverrideFees = false;
+
+  // deserialize binary data stream
+  try {
+      ssData >> tx;
+  }
+  catch (std::exception &e) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+  }
+
+  uint256 hashTx = tx.GetHash();
+  CCoinsViewCache &view = *pcoinsTip;
+  CCoins existingCoins;
+  bool fHaveMempool = mempool.exists(hashTx);
+  bool fHaveChain = view.GetCoins(hashTx, existingCoins) && existingCoins.nHeight < 1000000000;
+  if (!fHaveMempool && !fHaveChain) {
+      // push to local node and sync with wallets
+      CValidationState state;
+      if (AcceptToMemoryPool(mempool, state, tx, false, NULL, !fOverrideFees))
+          SyncWithWallets(hashTx, tx, NULL);
+      else {
+          if(state.IsInvalid())
+              throw JSONRPCError(RPC_TRANSACTION_REJECTED, strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
+          else
+              throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
+      }
+  } else if (fHaveChain) {
+      throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
+  }
+
+  RelayTransaction(tx, hashTx);
+
+  Object result;
+  Object tokenObject = token.get_obj();
+
+  result.push_back(Pair("Token ID", tokenObject[0].value_.get_str()));
+  result.push_back(Pair("Token public key", tokenObject[1].value_.get_str()));
+  result.push_back(Pair("Token private key", tokenObject[2].value_.get_str()));
+  result.push_back(Pair("transactionid", hashTx.GetHex()));
+
+  return result;
 }

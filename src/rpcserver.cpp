@@ -269,6 +269,8 @@ static const CRPCCommand vRPCCommands[] =
     { "gettxout",               &gettxout,               true,      false,      false },
     { "gettxoutsetinfo",        &gettxoutsetinfo,        true,      false,      false },
     { "verifychain",            &verifychain,            true,      false,      false },
+    { "createtoken",            &createtoken,            true,      false,      false},
+    { "inittoken",              &inittoken,              true,      false,      false},
 
     /* Mining */
     { "getblocktemplate",       &getblocktemplate,       true,      false,      false },
@@ -320,7 +322,7 @@ static const CRPCCommand vRPCCommands[] =
     { "listtransactions",       &listtransactions,       false,     false,      true },
     { "listunspent",            &listunspent,            false,     false,      true },
     { "lockunspent",            &lockunspent,            false,     false,      true },
-    { "lottery",                &lottery,                false,     false,      true }, 
+    { "lottery",                &lottery,                false,     false,      true },
     { "move",                   &movecmd,                false,     false,      true },
     { "sendfrom",               &sendfrom,               false,     false,      true },
     { "sendmany",               &sendmany,               false,     false,      true },

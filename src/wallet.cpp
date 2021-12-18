@@ -1044,6 +1044,50 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
     }
 }
 
+// populate vCoins with vector of spendable COutputs, no op_return transactions.
+void CWallet::AvailableCoins2(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl) const
+{
+    vCoins.clear();
+
+    {
+        LOCK(cs_wallet);
+        for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        {
+            const uint256& wtxid = it->first;
+            const CWalletTx* pcoin = &(*it).second;
+
+            if (!IsFinalTx(*pcoin))
+                continue;
+
+            if (fOnlyConfirmed && !pcoin->IsTrusted())
+                continue;
+
+            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity(chainActive.Height() - pcoin->GetDepthInMainChain()) > 0)
+                continue;
+
+            CTransaction transaction;
+            uint256 hashBlock;
+            //Notum ekki transactions með op return
+            if(GetTransaction(wtxid, transaction, hashBlock, true)) {
+              if(ContainsOpReturn(transaction)) {
+                continue;
+              }
+            }
+
+            int nDepth = pcoin->GetDepthInMainChain();
+            if (nDepth < 0)
+                continue;
+
+            for (unsigned int i = 0; i < pcoin->vout.size(); i++) {
+                if (!(IsSpent(wtxid, i)) && IsMine(pcoin->vout[i]) &&
+                    !IsLockedCoin((*it).first, i) && pcoin->vout[i].nValue > 0 &&
+                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
+                        vCoins.push_back(COutput(pcoin, i, nDepth));
+            }
+        }
+    }
+}
+
 static void ApproximateBestSubset(vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > >vValue, int64_t nTotalLower, int64_t nTargetValue,
                                   vector<char>& vfBest, int64_t& nBest, int iterations = 1000)
 {
@@ -1209,8 +1253,26 @@ bool CWallet::SelectCoins(int64_t nTargetValue, set<pair<const CWalletTx*,unsign
             (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue, 0, 1, vCoins, setCoinsRet, nValueRet)));
 }
 
+bool CWallet::SelectCoins2(int64_t nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl) const
+{
+    vector<COutput> vCoins;
+    AvailableCoins2(vCoins, true, coinControl);
 
+    // coin control -> return all selected outputs (we want all selected to go into the transaction for sure)
+    if (coinControl && coinControl->HasSelected())
+    {
+        BOOST_FOREACH(const COutput& out, vCoins)
+        {
+            nValueRet += out.tx->vout[out.i].nValue;
+            setCoinsRet.insert(make_pair(out.tx, out.i));
+        }
+        return (nValueRet >= nTargetValue);
+    }
 
+    return (SelectCoinsMinConf(nTargetValue, 1, 6, vCoins, setCoinsRet, nValueRet) ||
+            SelectCoinsMinConf(nTargetValue, 1, 1, vCoins, setCoinsRet, nValueRet) ||
+            (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue, 0, 1, vCoins, setCoinsRet, nValueRet)));
+}
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, std::string& strFailReason, const CCoinControl* coinControl)
@@ -1396,6 +1458,14 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue,
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, strFailReason, coinControl);
 }
 
+bool CWallet::CreateTransaction2(CScript scriptPubKey, int64_t nValue,
+                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, std::string& strFailReason, const CCoinControl* coinControl)
+{
+    vector< pair<CScript, int64_t> > vecSend;
+    vecSend.push_back(make_pair(scriptPubKey, nValue));
+    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, strFailReason, coinControl);
+}
+
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
@@ -1473,6 +1543,33 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
 }
 
 
+string CWallet::SendMoney2(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew)
+{
+    CReserveKey reservekey(this);
+    int64_t nFeeRequired;
+
+    if (IsLocked())
+    {
+        string strError = _("Error: Wallet locked, unable to create transaction!");
+        LogPrintf("SendMoney() : %s", strError);
+        return strError;
+    }
+    string strError;
+    if (!CreateTransaction2(scriptPubKey, nValue, wtxNew, reservekey, nFeeRequired, strError))
+    {
+        if (nValue + nFeeRequired > GetBalance())
+            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!"), FormatMoney(nFeeRequired));
+        LogPrintf("SendMoney() : %s\n", strError);
+        return strError;
+    }
+
+    if (!CommitTransaction(wtxNew, reservekey))
+        return _("Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
+
+    return "";
+}
+
+
 
 string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew)
 {
@@ -1487,6 +1584,21 @@ string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nV
     scriptPubKey.SetDestination(address);
 
     return SendMoney(scriptPubKey, nValue, wtxNew);
+}
+
+string CWallet::SendMoneyToDestination2(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew)
+{
+    // Check amount
+    if (nValue <= 0)
+        return _("Invalid amount");
+    if (nValue + nTransactionFee > GetBalance())
+        return _("Insufficient funds");
+
+    // Parse Bitcoin address
+    CScript scriptPubKey;
+    scriptPubKey.SetDestination(address);
+
+    return SendMoney2(scriptPubKey, nValue, wtxNew);
 }
 
 

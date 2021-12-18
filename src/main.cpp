@@ -558,10 +558,10 @@ bool IsStandardTx(const CTransaction& tx, string& reason)
 		}
 		if (whichType == TX_NULL_DATA)
 			nDataOut++;
-		else if (txout.IsDust(CTransaction::nMinRelayTxFee)) {
+		/*else if (txout.IsDust(CTransaction::nMinRelayTxFee)) {
 			reason = "dust";
 			return false;
-		}
+		}*/
 	}
 
 	// only one OP_RETURN txout is permitted
@@ -651,11 +651,9 @@ bool AreInputsStandard(const CTransaction& tx, CCoinsViewCache& mapInputs)
           return (sigops <= MAX_P2SH_SIGOPS);
       }
 		}
-
 		if (stack.size() != (unsigned int)nArgsExpected)
 			return false;
 	}
-
 	return true;
 }
 
@@ -831,7 +829,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 			LOCK(pool.cs);
 			CCoinsViewMemPool viewMemPool(*pcoinsTip, pool);
 			view.SetBackend(viewMemPool);
-
 			// do we already have it?
 			if (view.HaveCoins(hash))
 				return false;
@@ -844,14 +841,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 					return false;
 				}
 			}
-
 			// are the actual inputs available?
 			if (!view.HaveInputs(tx))
 				return state.Invalid(error("AcceptToMemoryPool : inputs already spent"),REJECT_DUPLICATE, "bad-txns-inputs-spent");
-
 			// Bring the best block into scope
 			view.GetBestBlock();
-
 			// we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
 			view.SetBackend(dummy);
 		}
@@ -871,7 +865,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 			if (nValueOut < DEFAULT_TRANSACTION_FEE)
 				return state.DoS(0, error("AcceptToMemoryPool : not enough value sent for OP_RETURN transaction %s, %d < %d", hash.ToString(), nValueOut, DEFAULT_TRANSACTION_FEE), REJECT_INSUFFICIENTFEE, "insufficient output value");
 		}
-		
 
 		CTxMemPoolEntry entry(tx, nFees, GetTime(), dPriority, chainActive.Height());
 		unsigned int nSize = entry.GetTxSize();
@@ -880,6 +873,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 		int64_t txMinFee = GetMinFee(tx, nSize, true, GMF_RELAY);
 		if (fLimitFree && nFees < txMinFee)
 			return state.DoS(0, error("AcceptToMemoryPool : not enough fees %s, %d < %d", hash.ToString(), nFees, txMinFee), REJECT_INSUFFICIENTFEE, "insufficient fee");
+
 
 		// Continuously rate-limit free transactions to mitigate micro-transaction flooding.
 		if (fLimitFree && nFees < CTransaction::nMinRelayTxFee)
@@ -890,7 +884,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 			int64_t nNow = GetTime();
 
 			LOCK(csFreeLimiter);
-
 			// Use an exponentially decaying ~10-minute window:
 			dFreeCount *= pow(1.0 - 1.0/600.0, (double)(nNow - nLastTime));
 			nLastTime = nNow;
@@ -901,7 +894,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 			LogPrint("mempool", "Rate limit dFreeCount: %g => %g\n", dFreeCount, dFreeCount+nSize);
 			dFreeCount += nSize;
 		}
-
 
 		if (fRejectInsaneFee && nFees > CTransaction::nMinRelayTxFee * 10000)
 			return error("AcceptToMemoryPool: : insane fees %s, %d > %d", hash.ToString(), nFees, CTransaction::nMinRelayTxFee * 10000);
@@ -1181,7 +1173,7 @@ int64_t GetBlockValue(int nHeight, int64_t nFees)
 
 	if(nHeight < nRichForkHeight) // fork height was less than 1226400
 		nSubsidy = ((nHeight <= 1000) ? 24000000 : 10000) * COIN; // Premine: First 1K blocks@24M SMLY will give 24 billion SMLY
-	else 
+	else
 		nSubsidy >>= (nHeight / 1226400); // Subsidy is cut in half every 1226400 blocks, which will occur approximately every 7 years
 
     return nSubsidy + nFees;
@@ -1192,10 +1184,10 @@ int64_t GetBlockValueDividends(int nHeight)
     int64_t nDividends = 0;  // dividends were not payed before the fork
     if(nHeight >= nRichForkHeight)
         nDividends = 4500 * COIN;
-    
+
     // Subsidy is cut in half every 1226400 blocks, which will occur approximately every 7 years
     nDividends >>= (nHeight / 1226400);
-    
+
     return nDividends;
 }
 
@@ -1256,7 +1248,7 @@ unsigned int static GetNextWorkRequired_Original(const CBlockIndex* pindexLast, 
 
     int64_t	nActualTimespanMax = nTargetTimespan*4;
     int64_t	nActualTimespanMin = nTargetTimespan/4;
-                  
+
     if (nActualTimespan < nActualTimespanMin)
         nActualTimespan = nActualTimespanMin;
     if (nActualTimespan > nActualTimespanMax)
@@ -1322,7 +1314,7 @@ static unsigned int GetNextWorkRequiredMULTI(const CBlockIndex* pindexLast, cons
 		return nProofOfWorkLimit;
 	}
 
-	multiAlgoTimespan = (pindexLast->nHeight >= 222000) ? 180 : 36;    
+	multiAlgoTimespan = (pindexLast->nHeight >= 222000) ? 180 : 36;
     multiAlgoTargetSpacing = multiAlgoNum * multiAlgoTimespan; // 5 * 180(36) seconds = 900 seconds
 
 	// Limit adjustment step
@@ -1335,11 +1327,11 @@ static unsigned int GetNextWorkRequiredMULTI(const CBlockIndex* pindexLast, cons
 	} else {
 		nAveragingTargetTimespan = nAveragingIntervalV2 * multiAlgoTargetSpacing; // 2* 5 * 180 = 1800 seconds
 		nActualTimespan = nAveragingTargetTimespan + (nActualTimespan - nAveragingTargetTimespan)/4;
-	}   
- 
+	}
+
     nMinActualTimespan = nAveragingTargetTimespan * (100 - (fDiffChange ? nMaxAdjustUpV2 : nMaxAdjustUp)) / 100;
     nMaxActualTimespan = nAveragingTargetTimespan * (100 + (fDiffChange ? nMaxAdjustDownV2 : nMaxAdjustDown)) / 100;
-    
+
     if (nActualTimespan < nMinActualTimespan)
 		nActualTimespan = nMinActualTimespan;
 	if (nActualTimespan > nMaxActualTimespan)
@@ -1645,7 +1637,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, CCoinsViewCach
 
 			// If prev is coinbase, check that it's matured
 			if (coins.IsCoinBase()) {
-				if (coins.nHeight < nRichForkHeight) { 
+				if (coins.nHeight < nRichForkHeight) {
 					if (nSpendHeight - coins.nHeight < COINBASE_MATURITY)
 						return state.Invalid(error("CheckInputs() : tried coinbase at depth %d %d %d %d",
 								nSpendHeight - coins.nHeight, nSpendHeight, coins.nHeight, COINBASE_MATURITY));
@@ -1823,10 +1815,10 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                                         CBitcoinAddress tAddress = CBitcoinAddress(asciiAddress);
                                         // if the coupon address is valid, the name and location are equal or less than 40,
                                         // date and time is on the right format and value is an integer then save it to the db
-                                        if (tAddress.IsValid() 
-                                            && is_before(hexToAscii(couponDateAndTime)) 
-                                            && couponLocation.length() <= 40 
-                                            && couponName.length() <= 40 
+                                        if (tAddress.IsValid()
+                                            && is_before(hexToAscii(couponDateAndTime))
+                                            && couponLocation.length() <= 40
+                                            && couponName.length() <= 40
                                             && ServiceList.IsService(toAddress)) {
                                             std::tuple<std::string, std::string, std::string, std::string, std::string, std::string> value;
 											if(!view.GetCouponList(asciiAddress, value)) {
@@ -2142,10 +2134,10 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
 				const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
 				const CScript &key = prevout.scriptPubKey;
 
-				if (key.IsPayToPublicKeyHash() || key.IsPayToScriptHash()) 
+				if (key.IsPayToPublicKeyHash() || key.IsPayToScriptHash())
 				{
 					std::pair<int64_t, int> value;
-					
+
 					int64_t nBalance =(view.GetAddressInfo(key,value)) ? value.first + prevout.nValue : prevout.nValue;
 					value = std::make_pair(nBalance, pindex->nHeight);
 					assert(view.SetAddressInfo(key,value));
@@ -2158,7 +2150,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
 	// move best block pointer to prevout block
 	view.SetBestBlock(pindex->pprev->GetBlockHash());
 
-	if (pfClean) { 
+	if (pfClean) {
 		*pfClean = fClean;
 		return true;
 	}
@@ -2244,7 +2236,7 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 	}
 
 	bool fScriptChecks = pindex->nHeight >= Checkpoints::GetTotalBlocksEstimate();
-	// Blocks 231253-231311 are inconsistent with the consensus protocol as well as 
+	// Blocks 231253-231311 are inconsistent with the consensus protocol as well as
 	// 289701-289758; 319168-319173; 327532-327536; 334558-334567; 340449-340450; 341431-341434, 342073-342074, 343497-343498
 	// 345887-345888; 347035-347036; 355209-355214; 360604-360608; 363847-363848; 367887-367894; 369838-370005;
     fRichCheck = fRichCheck && pindex->nHeight > 370005;
@@ -2308,14 +2300,14 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 						REJECT_INVALID, "bad-txns-inputs-missingorspent");
 
 			// processing inputs for address index
-			for (size_t j = 0; j < tx.vin.size(); j++) 
+			for (size_t j = 0; j < tx.vin.size(); j++)
 			{
             	const CTxIn input = tx.vin[j];
 				const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
 				const CScript &key = prevout.scriptPubKey;
 
 				if (key.IsPayToPublicKeyHash() || key.IsPayToScriptHash())
-				{					
+				{
 					std::pair<int64_t, int> value;
 					if(!view.GetAddressInfo(key,value))
 						return state.Abort(_("Failed to get address index"));
@@ -2332,7 +2324,7 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 			if (nSigOps > maxBlockSigops)
 				return state.DoS(100, error("ConnectBlock() : too many sigops"),
 						REJECT_INVALID, "bad-blk-sigops");
-			
+
 			nFees += view.GetValueIn(tx)-tx.GetValueOut();
 
 			std::vector<CScriptCheck> vChecks;
@@ -2427,9 +2419,9 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
                                         CBitcoinAddress tAddress = CBitcoinAddress(asciiAddress);
 										// If the coupon address is valid then save it to the db
                                         if (tAddress.IsValid()
-                                          && is_before(hexToAscii(couponDateAndTime)) 
-                                          && couponLocation.length() <= 40 
-                                          && couponName.length() <= 40  
+                                          && is_before(hexToAscii(couponDateAndTime))
+                                          && couponLocation.length() <= 40
+                                          && couponName.length() <= 40
                                           && ServiceList.IsService(toAddress)) {
                                             std::tuple<std::string, std::string, std::string, std::string, std::string, std::string> value;
 											value = std::make_tuple("NT", toAddress, hexToAscii(couponLocation), hexToAscii(couponName), hexToAscii(couponDateAndTime), hexToAscii(couponValue));
@@ -2646,7 +2638,7 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
             }
 
             if (key.IsPayToScriptHash() || key.IsPayToPublicKeyHash())
-			{					
+			{
 				std::pair<int64_t, int> value;
 				if(!view.GetAddressInfo(key,value))
 					value = std::make_pair(out.nValue, pindex->nHeight);
@@ -2656,8 +2648,8 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 					value = std::make_pair(nBalance,nHeight);
 				}
 				assert(view.SetAddressInfo(key,value));
-				addressInfo[key]=value;	
-			} 
+				addressInfo[key]=value;
+			}
 		}
 
 		CTxUndo txundo;
@@ -2667,8 +2659,8 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 
 		vPos.push_back(std::make_pair(block.GetTxHash(i), pos));
 		pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
-	}     
-    
+	}
+
 	int64_t nTime = GetTimeMicros() - nStart;
 	if (fBenchmark)
 		LogPrintf("- Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin)\n", (unsigned)block.vtx.size(), 0.001 * nTime, 0.001 * nTime / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * nTime / (nInputs-1));
@@ -2677,8 +2669,8 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
 		return state.DoS(100,
 				error("ConnectBlock() : coinbase pays too much (actual=%d vs limit=%d)",
 						block.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, nFees)),
-						REJECT_INVALID, "bad-cb-amount"); 
-    
+						REJECT_INVALID, "bad-cb-amount");
+
     // The coinbase tx must be split: 10% to the miner, 45% to the correct rich address and 45% to one of the EIAS addresses
     if(pindex != NULL && pindex->nHeight >= nRichForkHeight)
     {
@@ -2701,13 +2693,13 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
     		}
 
     		if(fRichPayment && fEIASPayment)
-    			break;	
+    			break;
     	}
 
         if (!fEIASPayment)
         {
             return state.DoS(100, error("ConnectBlock() : EIAS address not correct"), REJECT_INVALID, "bad-eias-payment");
-        }     
+        }
         if(!fRichPayment)
         {
         	if(!RichList.IsForked())
@@ -2720,7 +2712,7 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
     	if (fBenchmark)
 			LogPrintf("- Connect EIAS/Rich: %.2fms (fRichCheck: %s)\n", 0.001 * nTime, fRichCheck);
     }
-    
+
 	if (!control.Wait())
 		return state.DoS(100, false);
 	int64_t nTime2 = GetTimeMicros() - nStart;
@@ -2871,7 +2863,7 @@ bool static DisconnectTip(CValidationState &state)
 		if (!tx.IsCoinBase())
 			if (!AcceptToMemoryPool(mempool, stateDummy, tx, false, NULL))
 				mempool.remove(tx, removed, true);
-	} 
+	}
 	mempool.check(pcoinsTip);
 	// Update chainActive and related variables.
 	UpdateTip(pindexDelete->pprev);
@@ -2885,7 +2877,7 @@ bool static DisconnectTip(CValidationState &state)
 
 // Connect a new block to chainActive.
 bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew)
-{    
+{
     assert(pindexNew->pprev == chainActive.Tip());
 	mempool.check(pcoinsTip);
 	// Read block from disk.
@@ -3005,14 +2997,14 @@ bool ActivateBestChain(CValidationState &state) {
             }
 
 		// Check whether we have something to do.
-		if (chainMostWork.Tip() == NULL) break;	
+		if (chainMostWork.Tip() == NULL) break;
 
 		// Disconnect active blocks which are no longer in the best chain.
 		while (chainActive.Tip() && !chainMostWork.Contains(chainActive.Tip())) {
 			if (!DisconnectTip(state))
 				return false;
 		}
- 		
+
  		// heights of rich addresses need to be rolled back before new blocks are connected
 		if(!RichList.UpdateRichAddressHeights())
 			return false; //TODO: láta vita?
@@ -3128,12 +3120,12 @@ bool AddToBlockIndex(CBlock& block, CValidationState& state, const CDiskBlockPos
 		static uint256 hashPrevBestCoinBase;
 		g_signals.UpdatedTransaction(hashPrevBestCoinBase);
 		hashPrevBestCoinBase = block.GetTxHash(0);
-	} 
+	}
 	else
 	{
 		CheckForkWarningConditionsOnNewFork(pindexNew);
 	}
-		
+
 
 	if (!pblocktree->Flush())
 		return state.Abort(_("Failed to sync block index"));
@@ -3264,7 +3256,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
 	uint256 hash = block.GetHash();
 	//uint256 PoWhash = block.GetPoWHash(block.GetAlgo());
 	//LogPrintf("CheckBlock(): hash = %s\n", hash.ToString());
-	
+
 	//Get prev block index
 	CBlockIndex* pindexPrev = NULL;
 	int nHeight = 0;
@@ -3289,11 +3281,11 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
 	if(pindexPrev) {
 		unsigned int nCheckBits = 0;
 		nCheckBits = GetNextWorkRequired(pindexPrev, &block, block.GetAlgo());
-	
+
 		// Is this really needed?
 		if (block.nBits != nCheckBits) {
 			LogPrintf("CheckBlock() : proof of work in block not the same as calculated at height %i. Ignoring...\n", nHeight);
-			//return state.DoS(100, error("CheckBlock() : incorrect proof of work in header"), 
+			//return state.DoS(100, error("CheckBlock() : incorrect proof of work in header"),
 			//		REJECT_INVALID, "bad-diffbits");
 			}
 
@@ -3429,7 +3421,7 @@ bool AcceptBlock(CBlock& block, CValidationState& state, CDiskBlockPos* dbp)
 		//   A check on hash validation, based on block.Bits has already been performed (See CheckBlock(...)),
 		//   yet, now we check here if block.nBits is right... should be other way around.
 		//if (block.nBits != GetNextWorkRequired(pindexPrev, &block, block.GetAlgo()))
-		//	return state.DoS(100, error("AcceptBlock() : incorrect proof of work"), 
+		//	return state.DoS(100, error("AcceptBlock() : incorrect proof of work"),
 		//				    REJECT_INVALID, "bad-diffbits");
 
 		if ( !TestNet() && nHeight < nRichForkHeight && block.GetAlgo() != ALGO_SCRYPT )

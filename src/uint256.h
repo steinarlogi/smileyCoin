@@ -694,7 +694,7 @@ public:
         else
             *this = 0;
     }
-	
+
     uint256 trim256() const
     {
         uint256 ret;
@@ -702,7 +702,7 @@ public:
             ret.pn[i] = pn[i];
         }
         return ret;
-    }	
+    }
 };
 
 inline bool operator==(const uint512& a, uint64_t b)                          { return (base_uint512)a == b; }

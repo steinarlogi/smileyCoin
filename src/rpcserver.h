@@ -228,5 +228,7 @@ extern json_spirit::Value verifychain(const json_spirit::Array& params, bool fHe
 
 //Viðbót frá mér
 extern json_spirit::Value lottery(const json_spirit::Array& params, bool fHelp); //in rpcrawtransaction.cpp.
+extern json_spirit::Value createtoken(const json_spirit::Array& params, bool fhelp); // in rpcrawtransaction.cpp
+extern json_spirit::Value inittoken(const json_spirit::Array& params, bool fhelp); // in rpcrawtransaction.cpp
 
 #endif
